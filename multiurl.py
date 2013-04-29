@@ -64,11 +64,15 @@ class MultiResolverMatch(object):
     @property
     def func(self):
         def multiview(request):
+            resolver_match = request.resolver_match
             for i, match in enumerate(self.matches):
                 try:
-                    return match.func(request, *match.args, **match.kwargs)
+                    request.resolver_match = match
+                    response = match.func(request, *match.args, **match.kwargs)
+                    return response
                 except self.exceptions:
                     continue
+            request.resolver_match = resolver_match
             raise urlresolvers.Resolver404({'tried': self.patterns_matched, 'path': self.path})
         multiview.multi_resolver_match = self
         return multiview
