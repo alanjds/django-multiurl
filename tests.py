@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 
 from django.conf import settings
-from django.conf.urls import patterns, url
+from django.conf.urls import patterns, url, include
 from django.core.urlresolvers import RegexURLResolver, Resolver404, NoReverseMatch
 from django.http import HttpResponse
 from django.utils import unittest
@@ -23,6 +23,29 @@ class MultiviewTests(unittest.TestCase):
             multiurl(
                 url(r'^(\w+)/$', person, name='person'),
                 url(r'^(\w+)/$', place, name='place'),
+            )
+        ))
+
+        self.patterns_include = RegexURLResolver('^/', patterns('',
+            multiurl(
+                url(r'^find/', include([url(r'^(\w+)/$', thing, name='thing')])),
+                url(r'^(\w+)/$', person, name='person'),
+                url(r'^(\w+)/$', place, name='place'),
+            )
+        ))
+
+        self.patterns_multi_include = RegexURLResolver('^/', patterns('',
+            multiurl(
+                url(r'^find/',
+                    include([
+                        multiurl(
+                            url(r'^(\w+)/$', person, name='person'),
+                            url(r'^(\w+)/$', place, name='place'),
+                            url(r'^(\w+)/$', thing, name='thing')
+                        )
+                    ])
+                ),
+                url(r'^empty/', 'empty.page'),
             )
         ))
 
@@ -59,6 +82,25 @@ class MultiviewTests(unittest.TestCase):
         with self.assertRaises(NoReverseMatch):
             self.patterns_catchall.reverse('argh', 'xyz')
 
+    def test_include(self):
+        m = self.patterns_include.resolve('/find/bacon/')
+        response = m.func(request=None, *m.args, **m.kwargs)
+        self.assertEqual(response.content, b"Thing: Bacon")
+
+    def test_multi_include_person(self):
+        m = self.patterns_multi_include.resolve('/find/john/')
+        response = m.func(request=None, *m.args, **m.kwargs)
+        self.assertEqual(response.content, b"Person: John Smith")
+
+    def test_multi_include_place(self):
+        m = self.patterns_multi_include.resolve('/find/nyc/')
+        response = m.func(request=None, *m.args, **m.kwargs)
+        self.assertEqual(response.content, b"Place: New York City")
+
+    def test_multi_include_thing(self):
+        m = self.patterns_multi_include.resolve('/find/rock/')
+        response = m.func(request=None, *m.args, **m.kwargs)
+        self.assertEqual(response.content, b"Thing: Rock")
 #
 # Some "views" to test against.
 #
