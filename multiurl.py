@@ -1,5 +1,7 @@
 from __future__ import unicode_literals
 
+import collections
+
 from django.core import urlresolvers
 
 class ContinueResolving(Exception):
@@ -7,13 +9,15 @@ class ContinueResolving(Exception):
 
 def multiurl(*urls, **kwargs):
     exceptions = kwargs.get('catch', (ContinueResolving,))
-    return MultiRegexURLResolver(urls, exceptions)
+    decorators = kwargs.get('decorators', [])
+    return MultiRegexURLResolver(urls, exceptions, decorators=decorators)
 
 class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
-    def __init__(self, urls, exceptions):
+    def __init__(self, urls, exceptions, decorators=[]):
         super(MultiRegexURLResolver, self).__init__('', None)
         self._urls = urls
         self._exceptions = exceptions
+        self._decorators = decorators
 
     @property
     def url_patterns(self):
@@ -44,16 +48,20 @@ class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
                     patterns_matched.append([pattern])
                 tried.append([pattern])
         if matched:
-            return MultiResolverMatch(matched, self._exceptions, patterns_matched, path, tried)
+            return MultiResolverMatch(matched, self._exceptions, patterns_matched, path, tried, decorators=self._decorators)
         raise urlresolvers.Resolver404({'tried': tried, 'path': path})
 
 class MultiResolverMatch(object):
-    def __init__(self, matches, exceptions, patterns_matched, path, tried):
+    def __init__(self, matches, exceptions, patterns_matched, path, tried, decorators=[]):
         self.matches = matches
         self.exceptions = exceptions
         self.patterns_matched = patterns_matched
         self.path = path
         self.tried = tried
+        if isinstance(decorators, collections.Iterable):
+            self.decorators = decorators
+        else:
+            self.decorators = [decorators]
 
         # Attributes to emulate ResolverMatch
         self.kwargs = {}
@@ -70,10 +78,15 @@ class MultiResolverMatch(object):
                 try:
                     request.resolver_match = match
                     response = match.func(request, *match.args, **match.kwargs)
+
                     return response
                 except self.exceptions:
                     continue
             request.resolver_match = resolver_match
             raise urlresolvers.Resolver404({'tried': self.tried, 'path': self.path})
         multiview.multi_resolver_match = self
+
+        for decorator in reversed(self.decorators):
+            multiview = decorator(multiview)
+
         return multiview
