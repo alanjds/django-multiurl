@@ -4,6 +4,12 @@ import collections
 
 from django.core import urlresolvers
 
+try:
+    import newrelic.agent
+    NEWRELIC_ENABLED = True
+except ImportError:
+    NEWRELIC_ENABLED = False
+
 class ContinueResolving(Exception):
     pass
 
@@ -77,6 +83,11 @@ class MultiResolverMatch(object):
             for i, match in enumerate(self.matches):
                 try:
                     request.resolver_match = match
+
+                    if NEWRELIC_ENABLED:
+                        match.func = newrelic.agent.FunctionTraceWrapper(match.func)
+                        newrelic.agent.set_transaction_name(name=newrelic.agent.callable_name(match.func))
+
                     response = match.func(request, *match.args, **match.kwargs)
 
                     return response
@@ -88,5 +99,8 @@ class MultiResolverMatch(object):
 
         for decorator in reversed(self.decorators):
             multiview = decorator(multiview)
+
+        if NEWRELIC_ENABLED:
+            multiview = newrelic.agent.FunctionTraceWrapper(multiview)
 
         return multiview
