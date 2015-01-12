@@ -78,7 +78,6 @@ class MultiResolverMatch(object):
                 try:
                     request.resolver_match = match
                     response = match.func(request, *match.args, **match.kwargs)
-
                     return response
                 except self.exceptions:
                     continue
