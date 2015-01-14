@@ -7,13 +7,16 @@ class ContinueResolving(Exception):
 
 def multiurl(*urls, **kwargs):
     exceptions = kwargs.get('catch', (ContinueResolving,))
-    return MultiRegexURLResolver(urls, exceptions)
+    resolver = kwargs.get('resolver', MultiResolverMatch)
+    return MultiRegexURLResolver(urls, exceptions, resolver=resolver)
+
 
 class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
-    def __init__(self, urls, exceptions):
+    def __init__(self, urls, exceptions, resolver):
         super(MultiRegexURLResolver, self).__init__('', None)
         self._urls = urls
         self._exceptions = exceptions
+        self._resolver = resolver
 
     @property
     def url_patterns(self):
@@ -44,7 +47,7 @@ class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
                     patterns_matched.append([pattern])
                 tried.append([pattern])
         if matched:
-            return MultiResolverMatch(matched, self._exceptions, patterns_matched, path, tried)
+            return self._resolver(matched, self._exceptions, patterns_matched, path, tried)
         raise urlresolvers.Resolver404({'tried': tried, 'path': path})
 
 class MultiResolverMatch(object):
