@@ -16,14 +16,16 @@ class ContinueResolving(Exception):
 def multiurl(*urls, **kwargs):
     exceptions = kwargs.get('catch', (ContinueResolving,))
     decorators = kwargs.get('decorators', [])
-    return MultiRegexURLResolver(urls, exceptions, decorators=decorators)
+    resolver = kwargs.get('resolver', MultiResolverMatch)
+    return MultiRegexURLResolver(urls, exceptions, decorators, resolver)
 
 class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
-    def __init__(self, urls, exceptions, decorators=[]):
+    def __init__(self, urls, exceptions, decorators, resolver):
         super(MultiRegexURLResolver, self).__init__('', None)
         self._urls = urls
         self._exceptions = exceptions
         self._decorators = decorators
+        self._resolver = resolver
 
     @property
     def url_patterns(self):
@@ -54,11 +56,11 @@ class MultiRegexURLResolver(urlresolvers.RegexURLResolver):
                     patterns_matched.append([pattern])
                 tried.append([pattern])
         if matched:
-            return MultiResolverMatch(matched, self._exceptions, patterns_matched, path, tried, decorators=self._decorators)
+            return self._resolver(matched, self._exceptions, patterns_matched, path, tried, self._decorators)
         raise urlresolvers.Resolver404({'tried': tried, 'path': path})
 
 class MultiResolverMatch(object):
-    def __init__(self, matches, exceptions, patterns_matched, path, tried, decorators=[]):
+    def __init__(self, matches, exceptions, patterns_matched, path, tried, decorators):
         self.matches = matches
         self.exceptions = exceptions
         self.patterns_matched = patterns_matched
